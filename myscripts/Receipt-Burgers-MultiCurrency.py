@@ -243,9 +243,17 @@ class ImageManager:
 # SETTINGS AND INITIALIZATION
 # ============================================================================
 
-window_width, window_height = 950, 500
+# Default window dimensions
+DEFAULT_WINDOW_WIDTH = 950
+DEFAULT_WINDOW_HEIGHT = 500
+MIN_WINDOW_WIDTH = 600
+MIN_WINDOW_HEIGHT = 400
+MAX_WINDOW_WIDTH = 1920
+MAX_WINDOW_HEIGHT = 1080
+
+window_width, window_height = DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 pygame.init()
-screen = pygame.display.set_mode((window_width, window_height), pygame.DOUBLEBUF, 32)
+screen = pygame.display.set_mode((window_width, window_height), pygame.DOUBLEBUF | pygame.RESIZABLE, 32)
 pygame.display.set_caption("Receipt Burger")
 text_font = pygame.font.SysFont("Cooper Black", 15)
 big_text_font = pygame.font.SysFont("Cooper Black", 30)
@@ -396,13 +404,31 @@ ingredients = [
 
 
 # ============================================================================
+# HELPER FUNCTIONS FOR SCALING
+# ============================================================================
+
+def get_scale_factor() -> float:
+    """Calculate scale factor based on current window size"""
+    return window_width / DEFAULT_WINDOW_WIDTH
+
+def scale_value(value: float) -> float:
+    """Scale a value based on current window width"""
+    return value * get_scale_factor()
+
+def scale_position(x: float, y: float) -> Tuple[float, float]:
+    """Scale a position based on current window size"""
+    scale = get_scale_factor()
+    return (x * scale, y * scale)
+
+
+# ============================================================================
 # FUNCTIONS (ORIGINAL WITH MINIMAL CHANGES)
 # ============================================================================
 
 # Function for outputting text onto the screen
 def draw_text(text, font, text_col, x, y):
     """Renders and draws text on the screen."""
-    img = font.render(text, True, text_col, None, 940)  # renders the text
+    img = font.render(text, True, text_col, None, int(940 * get_scale_factor()))  # renders the text, scaled for window
     screen.blit(img, (x, y))  # draws text onscreen
 
 
@@ -415,9 +441,9 @@ def final():
 
     draw_text(finreceipt, text_font, (255, 255, 255), 10, 50)  # Lists every ingredient
     # Lists the final cost of the burger
-    draw_text("Total: " + current_currency.get_symbol() + str(round(total, 2)), big_text_font, (255, 255, 255), 10, 350)
+    draw_text("Total: " + current_currency.get_symbol() + str(round(total, 2)), big_text_font, (255, 255, 255), 10, int(window_height * 0.7))
 
-    image("logo.png", False, 10, 380, None, None)  # Displays the logo in the corner
+    image("logo.png", False, 10, int(window_height * 0.76), None, None)  # Displays the logo in the corner
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -437,20 +463,24 @@ def ordering():
     total = round(total, 2)  # Ensures there are no errors with addition (1+1=2.000001)
 
     text = "Press enter to submit your order"  # Displays splash text, allowing the user to submit when they finish
-    draw_text(text, text_font, (255, 255, 255), 10, 475)
+    draw_text(text, text_font, (255, 255, 255), 10, int(window_height * 0.95))
 
     # Displays the total cost of the burger
-    draw_text("Total: " + current_currency.get_symbol() + str(total), text_font, (255, 255, 255), 475 - (len(str(total)) * 10), 475)
+    draw_text("Total: " + current_currency.get_symbol() + str(total), text_font, (255, 255, 255), int(window_width * 0.5) - (len(str(total)) * 10), int(window_height * 0.95))
     # Checks the amount of lines in the receipt, renders it, and moves it upwards depending on how many lines there are
     lineamount = len(receipt.splitlines())
-    draw_text(receipt, text_font, (255, 255, 255), 350, 475 - (lineamount * 18))
+    draw_text(receipt, text_font, (255, 255, 255), int(window_width * 0.37), int(window_height * 0.95) - (lineamount * 18))
 
     for i in range(10):
         # Renders every button with a clickable hitbox
-        button = pygame.Rect(ingredients[i].button_pos[0], ingredients[i].button_pos[1], 200, 50)
+        button_x = int(scale_position(ingredients[i].button_pos[0], 0)[0])
+        button_y = int(scale_position(0, ingredients[i].button_pos[1])[1])
+        button = pygame.Rect(button_x, button_y, int(200 * get_scale_factor()), int(50 * get_scale_factor()))
         buttons.append(button)
-        image(ingredients[i].get_image(current_currency), True, ingredients[i].button_pos[0], ingredients[i].button_pos[1],
-              ingredients[i].get_dimensions(current_currency)[0], ingredients[i].get_dimensions(current_currency)[1])
+        
+        # Get scaled dimensions
+        scaled_dims = tuple(int(d * get_scale_factor()) for d in ingredients[i].get_dimensions(current_currency))
+        image(ingredients[i].get_image(current_currency), True, button_x, button_y, scaled_dims[0], scaled_dims[1])
 
         # Renders the labels for each ingredient, consisting of the name, price, and calorie count
         name = ingredients[i].name
@@ -458,11 +488,20 @@ def ordering():
         calories = ingredients[i].get_calories(current_currency)
         text = str(name) + "\n" + current_currency.get_symbol() + str(price) + "\tCalories:" + str(calories)
         text = text.expandtabs(4)  # Pygame cannot display tabs in text (\t), so this instead replaces them with spaces
-        draw_text(text, text_font, (255, 255, 255), 750, ingredients[i].button_pos[1])
+        draw_text(text, text_font, (255, 255, 255), int(window_width * 0.79), button_y)
     for event in pygame.event.get():
         if event.type == pygame.MOUSEBUTTONDOWN and buttons[0] != None:  # checks if a user has pressed the left mouse button, and if the buttons are properly rendered
             if event.button == 1:
                 click = True
+        elif event.type == pygame.FINGERDOWN:  # Handle touchscreen input - treat like mouse click
+            # Convert normalized touch coordinates to pixel coordinates
+            touch_x = event.x * window_width
+            touch_y = event.y * window_height
+            # Create a fake event with pixel coordinates
+            fake_event = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {'button': 1, 'pos': (touch_x, touch_y)})
+            if buttons[0] != None:
+                click = True
+                event = fake_event
         if event.type == pygame.QUIT:  # if user has pressed the X button, the program closes
             run = False
             pygame.quit()
@@ -484,18 +523,22 @@ def initiate():
     """Initialization screen where the user chooses which currency to order in"""
     global buttons, runinit, current_currency, dropdown, run  # variables from outside the function that will be used
     
-    draw_text("Select your location:\n(Prices will be provided in that nation's currency.)", big_text_font, (255, 255, 255), 50, 50)  # Splash text instructions for the user
+    draw_text("Select your location:\n(Prices will be provided in that nation's currency.)", big_text_font, (255, 255, 255), int(window_width * 0.053), int(window_height * 0.1))  # Splash text instructions for the user
 
     # Initialize dropdown on first run
     if dropdown is None:
         currency_names = [c.get_name() for c in Currency]
-        dropdown = DropdownMenu(375, 200, 200, 40, currency_names, font=big_text_font, text_color=(255, 255, 255))
+        dropdown_x = int(window_width * 0.395)
+        dropdown_y = int(window_height * 0.4)
+        dropdown_width = int(200 * get_scale_factor())
+        dropdown_height = int(40 * get_scale_factor())
+        dropdown = DropdownMenu(dropdown_x, dropdown_y, dropdown_width, dropdown_height, currency_names, font=big_text_font, text_color=(255, 255, 255))
     
     # Draw dropdown
     dropdown.draw(screen)
     
     # Display logo
-    image("logo.png", False, 10, 380, None, None)
+    image("logo.png", False, 10, int(window_height * 0.76), None, None)
 
     for event in pygame.event.get():
         # Handle dropdown events
@@ -505,6 +548,17 @@ def initiate():
             current_currency = Currency(selected)
             items.append(ingredients[0].get_image(current_currency))  # Add bun as first item
             runinit += 1
+        
+        # Handle touchscreen for dropdown
+        if event.type == pygame.FINGERDOWN:
+            touch_x = event.x * window_width
+            touch_y = event.y * window_height
+            fake_event = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {'button': 1, 'pos': (touch_x, touch_y)})
+            selected = dropdown.handle_event(fake_event)
+            if selected is not None:
+                current_currency = Currency(selected)
+                items.append(ingredients[0].get_image(current_currency))
+                runinit += 1
         
         if event.type == pygame.QUIT:
             run = False
@@ -537,13 +591,16 @@ def image(source, button, dimx, dimy, cropx, cropy):
         if source == "logo.png":  # if the image is the logo, scale it by a factor of half instead of shrinking it to the specified dimensions to avoid stretching
             loaded_image = image_manager.load_image(source)
             if loaded_image:
-                loaded_image = pygame.transform.scale_by(loaded_image, 0.5)
+                scale = get_scale_factor()
+                loaded_image = pygame.transform.scale_by(loaded_image, 0.5 * scale)
                 screen.blit(loaded_image, (dimx, dimy))
         else:
             loaded_image = image_manager.load_image(source)
             if loaded_image:
                 # stretch the image to be exactly 300x100 to make it fit onscreen, and because it looks funny
-                loaded_image = pygame.transform.scale(loaded_image, (300, 100))
+                scaled_width = int(300 * get_scale_factor())
+                scaled_height = int(100 * get_scale_factor())
+                loaded_image = pygame.transform.scale(loaded_image, (scaled_width, scaled_height))
                 screen.blit(loaded_image, (dimx, dimy))  # update the screen with the image
 
 
@@ -563,11 +620,16 @@ while run:
         ordering()
         # for each image in the list of images to render
         for itemnum, item in enumerate(items):
-            image(items[itemnum], False, 25, (390 - 10 * itemnum), None, None)  # Render each image in the list
+            image(items[itemnum], False, 25, int(390 - 10 * itemnum * get_scale_factor()), None, None)  # Render each image in the list
     else:
         final()
     
     for event in pygame.event.get():  # if the pygame system detects the user interacting, check:
+        if event.type == pygame.VIDEORESIZE:  # Handle window resize
+            new_width = max(MIN_WINDOW_WIDTH, min(event.size[0], MAX_WINDOW_WIDTH))
+            new_height = max(MIN_WINDOW_HEIGHT, min(event.size[1], MAX_WINDOW_HEIGHT))
+            window_width, window_height = new_width, new_height
+            screen = pygame.display.set_mode((window_width, window_height), pygame.DOUBLEBUF | pygame.RESIZABLE, 32)
         if event.type == pygame.QUIT:  # if the user has quit the program. If they have, close the program
             run = False
             pygame.quit()
