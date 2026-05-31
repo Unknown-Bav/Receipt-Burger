@@ -523,7 +523,13 @@ def image(source, button, dimx, dimy, cropx, cropy):
             if loaded_image:
                 screen.blit(loaded_image, (dimx, dimy), (500 / 3, 500 / 3, 200, 50))
         elif source == "ambun.png" or source == "canbun.png":  # this just changes where the image focuses if the file is the bun
-            screen.blit(loaded_image, (dimx, dimy), (cropx / 3, cropy * 4 / 5, 200, 50))
+            # Use bunbottom.png for the bottom bun image
+            bun_bottom = image_manager.load_image("bunbottom.png")
+            if bun_bottom:
+                screen.blit(bun_bottom, (dimx, dimy), (cropx / 3, cropy / 3, 200, 50))
+            else:
+                # Fallback to original bun image if bunbottom.png not found
+                screen.blit(loaded_image, (dimx, dimy), (cropx / 3, cropy * 4 / 5, 200, 50))
         else:
             # renders each image as a 200px*50px button, with a focus on one third of the total image
             screen.blit(loaded_image, (dimx, dimy), (cropx / 3, cropy / 3, 200, 50))
