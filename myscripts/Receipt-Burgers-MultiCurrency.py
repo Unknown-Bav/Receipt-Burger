@@ -136,6 +136,12 @@ class DropdownMenu:
         self.color_hover = (150, 150, 150)
         self.hovered_index = -1
     
+    def update_position(self, x: int, y: int) -> None:
+        """Update the position of the dropdown."""
+        self.x = x
+        self.y = y
+        self.rect = pygame.Rect(x, y, self.width, self.height)
+    
     def handle_event(self, event: pygame.event.EventType) -> Optional[int]:
         """
         Handle pygame events.
@@ -270,7 +276,7 @@ total = 0  # Total cost for the burger
 buttons = []  # A list to contain the rects that need to be created for hitboxes
 buttonindex = 0  # Tells the program which button is clicked
 current_currency = None  # Will hold the selected Currency enum
-dropdown = None  # Will hold the dropdown menu widget
+dropdown = None  # Will hold the dropdown menu widget (created once, updated on resize)
 run = True  # Main loop control
 runinit = 0  # a variable that tells the program what screen to display
 
@@ -420,6 +426,26 @@ def scale_position(x: float, y: float) -> Tuple[float, float]:
     scale = get_scale_factor()
     return (x * scale, y * scale)
 
+def create_or_update_dropdown() -> DropdownMenu:
+    """Create or update dropdown menu based on current window size"""
+    global dropdown
+    currency_names = [c.get_name() for c in Currency]
+    dropdown_x = int(window_width * 0.395)
+    dropdown_y = int(window_height * 0.4)
+    dropdown_width = int(200 * get_scale_factor())
+    dropdown_height = int(40 * get_scale_factor())
+    
+    if dropdown is None:
+        dropdown = DropdownMenu(dropdown_x, dropdown_y, dropdown_width, dropdown_height, currency_names, font=big_text_font, text_color=(255, 255, 255))
+    else:
+        # Update position and size on window resize
+        dropdown.update_position(dropdown_x, dropdown_y)
+        dropdown.width = dropdown_width
+        dropdown.height = dropdown_height
+        dropdown.rect = pygame.Rect(dropdown_x, dropdown_y, dropdown_width, dropdown_height)
+    
+    return dropdown
+
 
 # ============================================================================
 # FUNCTIONS (ORIGINAL WITH MINIMAL CHANGES)
@@ -498,10 +524,9 @@ def ordering():
             touch_x = event.x * window_width
             touch_y = event.y * window_height
             # Create a fake event with pixel coordinates
-            fake_event = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {'button': 1, 'pos': (touch_x, touch_y)})
             if buttons[0] != None:
                 click = True
-                event = fake_event
+                event.pos = (touch_x, touch_y)
         if event.type == pygame.QUIT:  # if user has pressed the X button, the program closes
             run = False
             pygame.quit()
@@ -525,14 +550,8 @@ def initiate():
     
     draw_text("Select your location:\n(Prices will be provided in that nation's currency.)", big_text_font, (255, 255, 255), int(window_width * 0.053), int(window_height * 0.1))  # Splash text instructions for the user
 
-    # Initialize dropdown on first run
-    if dropdown is None:
-        currency_names = [c.get_name() for c in Currency]
-        dropdown_x = int(window_width * 0.395)
-        dropdown_y = int(window_height * 0.4)
-        dropdown_width = int(200 * get_scale_factor())
-        dropdown_height = int(40 * get_scale_factor())
-        dropdown = DropdownMenu(dropdown_x, dropdown_y, dropdown_width, dropdown_height, currency_names, font=big_text_font, text_color=(255, 255, 255))
+    # Create or update dropdown based on current window size
+    dropdown = create_or_update_dropdown()
     
     # Draw dropdown
     dropdown.draw(screen)
@@ -541,16 +560,16 @@ def initiate():
     image("logo.png", False, 10, int(window_height * 0.76), None, None)
 
     for event in pygame.event.get():
-        # Handle dropdown events
-        selected = dropdown.handle_event(event)
-        if selected is not None:
-            # Currency selected
-            current_currency = Currency(selected)
-            items.append(ingredients[0].get_image(current_currency))  # Add bun as first item
-            runinit += 1
+        # Handle dropdown events for both mouse and touch
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            selected = dropdown.handle_event(event)
+            if selected is not None:
+                # Currency selected
+                current_currency = Currency(selected)
+                items.append(ingredients[0].get_image(current_currency))  # Add bun as first item
+                runinit += 1
         
-        # Handle touchscreen for dropdown
-        if event.type == pygame.FINGERDOWN:
+        elif event.type == pygame.FINGERDOWN:  # Handle touchscreen for dropdown
             touch_x = event.x * window_width
             touch_y = event.y * window_height
             fake_event = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {'button': 1, 'pos': (touch_x, touch_y)})
