@@ -168,7 +168,8 @@ class DropdownMenu:
                             return i
                     
                     # Clicked outside dropdown, close it
-                    self.is_open = False
+                    if not self.rect.collidepoint(event.pos):
+                        self.is_open = False
         
         elif event.type == pygame.MOUSEMOTION:
             if self.is_open:
