@@ -76,29 +76,26 @@ class Ingredient:
         return self.calories.get(currency, 0)
     
     def get_image(self, currency: Currency) -> str:
-        """Get image filename for specified currency (Canada=0, America=1)."""
-        if currency == Currency.CANADA:
-            return self.images[0]
-        elif currency == Currency.AMERICA:
+        """Get image filename for specified currency. Non-America currencies use Canada images."""
+        if currency == Currency.AMERICA:
             return self.images[1]
         else:
-            # For other currencies, use America image as fallback
-            return self.images[1]
+            # All other currencies (including Canada) use Canada images
+            return self.images[0]
     
     def get_dimensions(self, currency: Currency) -> Tuple[int, int]:
         """Get image dimensions for specified currency."""
-        if currency == Currency.CANADA:
-            key = 0
-        elif currency == Currency.AMERICA:
+        # Non-America currencies use Canada dimensions
+        if currency == Currency.AMERICA:
             key = 1
         else:
-            key = 1  # Fallback to America
+            key = 0
         
         # Return dimensions using the Canada/America index
-        for i, (curr, dims) in enumerate(self.dimensions.items()):
-            if (i == 0 and key == 0) or (i == 1 and key == 1):
-                return dims
-        return self.dimensions[Currency.CANADA]
+        dims_list = list(self.dimensions.values())
+        if key < len(dims_list):
+            return dims_list[key]
+        return dims_list[0]
 
 
 # ============================================================================
@@ -109,7 +106,8 @@ class DropdownMenu:
     """Simple dropdown menu widget using pygame."""
     
     def __init__(self, x: int, y: int, width: int, height: int, 
-                 options: List[str], default_index: int = 0):
+                 options: List[str], default_index: int = 0, 
+                 font: pygame.font.Font = None, text_color: Tuple[int, int, int] = None):
         """
         Initialize dropdown menu.
         
@@ -118,6 +116,8 @@ class DropdownMenu:
             width, height: Dimensions
             options: List of option strings
             default_index: Index of default selected option
+            font: Font to use (uses pygame default if None)
+            text_color: Text color tuple
         """
         self.x = x
         self.y = y
@@ -128,12 +128,12 @@ class DropdownMenu:
         self.is_open = False
         self.rect = pygame.Rect(x, y, width, height)
         self.option_rects = []
-        self.font = pygame.font.SysFont("Arial", 14)
-        self.color_closed = (100, 100, 100)
-        self.color_open = (150, 150, 150)
-        self.color_text = (255, 255, 255)
+        self.font = font or pygame.font.SysFont("Cooper Black", 14)
+        self.text_color = text_color or (255, 255, 255)
+        self.color_closed = (60, 60, 60)
+        self.color_open = (100, 100, 100)
         self.color_border = (255, 255, 255)
-        self.color_hover = (200, 200, 200)
+        self.color_hover = (150, 150, 150)
         self.hovered_index = -1
     
     def handle_event(self, event: pygame.event.EventType) -> Optional[int]:
@@ -181,13 +181,13 @@ class DropdownMenu:
         pygame.draw.rect(screen, self.color_border, self.rect, 2)
         
         # Draw selected option text
-        text = self.font.render(self.options[self.selected_index], True, self.color_text)
+        text = self.font.render(self.options[self.selected_index], True, self.text_color)
         screen.blit(text, (self.x + 5, self.y + self.height // 2 - text.get_height() // 2))
         
         # Draw dropdown arrow
         arrow_x = self.x + self.width - 15
         arrow_y = self.y + self.height // 2
-        pygame.draw.polygon(screen, self.color_text, 
+        pygame.draw.polygon(screen, self.text_color, 
                           [(arrow_x, arrow_y - 4), (arrow_x + 8, arrow_y - 4), (arrow_x + 4, arrow_y)])
         
         # Draw open dropdown options
@@ -204,7 +204,7 @@ class DropdownMenu:
                 pygame.draw.rect(screen, self.color_border, opt_rect, 1)
                 
                 # Draw option text
-                text = self.font.render(option, True, self.color_text)
+                text = self.font.render(option, True, self.text_color)
                 screen.blit(text, (self.x + 5, opt_y + self.height // 2 - text.get_height() // 2))
     
     def get_selected(self) -> int:
@@ -263,6 +263,8 @@ buttons = []  # A list to contain the rects that need to be created for hitboxes
 buttonindex = 0  # Tells the program which button is clicked
 current_currency = None  # Will hold the selected Currency enum
 dropdown = None  # Will hold the dropdown menu widget
+run = True  # Main loop control
+runinit = 0  # a variable that tells the program what screen to display
 
 # ============================================================================
 # INGREDIENTS WITH MULTI-CURRENCY SUPPORT
@@ -429,7 +431,7 @@ def final():
 
 def ordering():
     """Second screen of the program, displays your burger while you order, a live, updating receipt, and each ingredient that the user can choose from"""
-    global ingredients, buttonindex, buttons, run, text_font, receipt, total, finreceipt  # Imports variables to be used in the function
+    global ingredients, buttonindex, buttons, run, text_font, receipt, total, finreceipt, runinit, current_currency  # Imports variables to be used in the function
     buttons = []  # Empties the button list at the beginning of each loop, to avoid the list adding the same thing twice
     click = False  # Tells the program the user has not clicked
     total = round(total, 2)  # Ensures there are no errors with addition (1+1=2.000001)
@@ -487,7 +489,7 @@ def initiate():
     # Initialize dropdown on first run
     if dropdown is None:
         currency_names = [c.get_name() for c in Currency]
-        dropdown = DropdownMenu(375, 200, 200, 40, currency_names)
+        dropdown = DropdownMenu(375, 200, 200, 40, currency_names, font=big_text_font, text_color=(255, 255, 255))
     
     # Draw dropdown
     dropdown.draw(screen)
@@ -544,8 +546,6 @@ def image(source, button, dimx, dimy, cropx, cropy):
 # ============================================================================
 
 # The core loop that keeps the program open
-run = True
-runinit = 0  # a variable that tells the program what screen to display
 while run:
     # Refreshes the screen each frame
     screen.fill("black")
